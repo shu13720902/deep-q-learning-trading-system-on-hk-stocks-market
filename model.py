@@ -1,12 +1,11 @@
 import random
 
-import keras
 import numpy as np
 import tensorflow as tf  # Deep Learning library
-from keras import backend as keras_backend
 from sklearn.preprocessing import OneHotEncoder
 
 from prioritized_exp_replay import Memory
+
 
 class DDDQNNet:
     def __init__(self, state_size, action_size, learning_rate, sess, name):
@@ -33,20 +32,23 @@ class DDDQNNet:
                 self.target_Q = tf.placeholder(tf.float32, [None], name="target")
 
                 # Input
-                self.dense1 = tf.layers.dense(inputs=self.inputs_,
+                self.batchNorm1 = tf.keras.layers.BatchNormalization(name="batchNorm1")(self.inputs_)
+                self.dense1 = tf.layers.dense(inputs=self.batchNorm1,
                                               units=512,
                                               activation=tf.nn.elu,
                                               kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                               name="dense1")
-                self.dense2 = tf.layers.dense(inputs=self.dense1,
+                self.batchNorm2 = tf.keras.layers.BatchNormalization(name="batchNorm2")(self.inputs_)
+                self.dense2 = tf.layers.dense(inputs=self.batchNorm2,
                                               units=256,
                                               activation=tf.nn.elu,
                                               kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                               name="dense2")
+                self.dropOut = tf.keras.layers.Dropout(rate=0.2)(self.dense2)
 
                 # Here we separate into two streams
                 # The one that calculate V(s)
-                self.value_fc = tf.layers.dense(inputs=self.dense2,
+                self.value_fc = tf.layers.dense(inputs=self.dropOut,
                                                 units=128,
                                                 activation=tf.nn.elu,
                                                 kernel_initializer=tf.contrib.layers.xavier_initializer(),
@@ -150,7 +152,7 @@ class Model:
     def predict(self, state):
         # state = np.expand_dims(state, axis=0)
         # action_pos = self.model.predict(state).argmax()
-        
+
         with self.sess.graph.as_default():
             Qs = self.sess.run(self.model.output, feed_dict={self.model.inputs_: state.reshape((1, *state.shape))})
         # Take the biggest Q value (= the best action)
@@ -196,7 +198,6 @@ class Model:
         targets_mb = np.array([each for each in target_Qs_batch])
 
         with self.sess.graph.as_default():
-
             _, loss, absolute_errors = self.sess.run(
                 [self.model.optimizer, self.model.loss, self.model.absolute_errors],
                 feed_dict={self.model.inputs_: states_mb,
@@ -307,7 +308,7 @@ class SellSignalModel(SignalModel):
                 target_Qs_batch.append(target)
 
             targets_mb = np.array([each for each in target_Qs_batch])
-            
+
             _, loss, absolute_errors = self.sess.run(
                 [self.model.optimizer, self.model.loss, self.model.absolute_errors],
                 feed_dict={self.model.inputs_: states_mb,
